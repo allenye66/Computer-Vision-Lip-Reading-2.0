@@ -4,3 +4,21 @@
 
 https://user-images.githubusercontent.com/46653284/228344036-ad19e45c-d329-4040-9e05-ef3bca7b3e50.mov
 
+
+
+
+## The words that the model has been trained on:
+### Each word is recorded for 20 frames.
+- here
+- is
+- a
+- demo
+- can
+- you
+- read
+- my
+- lips
+- cat
+- dog
+- hello
+- bye

@@ -11,7 +11,10 @@ import csv
 from collections import deque
 
 
-
+TOTAL_FRAMES = 22
+VALID_WORD_THRESHOLD = 5
+NOT_TALKING_THRESHOLD = 10
+PAST_BUFFER_SIZE = 4
 # Load the detector
 detector = dlib.get_frontal_face_detector()
 
@@ -30,15 +33,16 @@ LIP_WIDTH = 112
 LIP_HEIGHT = 80
 
 data_count = 1
-word_to_collect_1 = input("First word you like to collect data for? ")
-word_to_collect_2 = input("Second word would you like to collect data for? ")
-first_word = True
+label = input("What word you like to collect data for? ")
 labels = []
 
-past_buffer_size = 4
-past_word_frames = deque(maxlen=past_buffer_size)
+past_word_frames = deque(maxlen=PAST_BUFFER_SIZE)
 
 ending_buffer_size = 5
+
+
+
+
 while True:
     _, frame = cap.read()
     # Convert image into grayscale
@@ -107,40 +111,54 @@ while True:
         lip_frame_eq= cv2.GaussianBlur(lip_frame_eq, (5, 5), 0)
         lip_frame = lip_frame_eq
         
-        label = None
-        if(first_word):
-            label = word_to_collect_1
-        else:
-            label = word_to_collect_2
+
         # Draw a circle around the mouth
         for n in range(48, 61):
             x = landmarks.part(n).x
             y = landmarks.part(n).y
             cv2.circle(img=frame, center=(x, y), radius=3, color=(0, 255, 0), thickness=-1)
 
+
+
+
+        print(len(curr_word_frames))
+
         if lip_distance > 45: # person is talking
             cv2.putText(frame, "Talking", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
             curr_word_frames += [lip_frame.tolist()]
-            
-
             not_talking_counter = 0
+
         else:
             cv2.putText(frame, "Not talking", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             not_talking_counter += 1
-            if not_talking_counter >= 10 and len(curr_word_frames) > 3: # word finished
-                print(f"adding {label.upper()} shape", lip_frame.shape, "count is", data_count, "frames is", len(curr_word_frames))
+            
+            # a valid word finished and has all needed ending buffer frames
+            # we do len(curr_word_frames) + PAST_BUFFER_SIZE since we add past frames after this step (not included yet)
+            if not_talking_counter >= NOT_TALKING_THRESHOLD and len(curr_word_frames) + PAST_BUFFER_SIZE == TOTAL_FRAMES: 
                 data_count += 1
                 curr_word_frames = list(past_word_frames) + curr_word_frames
+                print(f"adding {label.upper()} shape", lip_frame.shape, "count is", data_count, "frames is", len(curr_word_frames))
+
                 all_words.append(curr_word_frames)
                 labels.append(label)
-                first_word = not first_word
                 curr_word_frames = []
                 not_talking_counter = 0
-            elif not_talking_counter < ending_buffer_size and len(curr_word_frames) > 3: #add ending buffer frames
+
+            # curr word frames not fully done yet, add ending buffer frames
+            elif not_talking_counter < NOT_TALKING_THRESHOLD and len(curr_word_frames) + PAST_BUFFER_SIZE < TOTAL_FRAMES and len(curr_word_frames) > VALID_WORD_THRESHOLD:
+                #print("adding ending buffer frames the len(curr_word_frames) is", (len(curr_word_frames)))
                 curr_word_frames += [lip_frame.tolist()]
+                not_talking_counter = 0
+            # too little frames, discard the data
+            elif len(curr_word_frames) < VALID_WORD_THRESHOLD or (not_talking_counter >= NOT_TALKING_THRESHOLD and len(curr_word_frames) + PAST_BUFFER_SIZE > TOTAL_FRAMES):
+                #print("bad recording, resetting curr word frames")
+                curr_word_frames = []
+
             past_word_frames+= [lip_frame.tolist()]
-            if len(past_word_frames) > past_buffer_size:
+
+            #circular frame buffer
+            if len(past_word_frames) > PAST_BUFFER_SIZE:
                 past_word_frames.pop(0)
 
     cv2.imshow(winname="Mouth", mat=frame)
@@ -149,7 +167,7 @@ while True:
     if cv2.waitKey(delay=1) == 27:
         break
 
-
+#not needed for new version where we have a set amount of frames
 def process_frames(all_words, labels):
     # Get the median length of all sublists
     median_length = statistics.median([len(sublist) for sublist in all_words])
@@ -196,8 +214,6 @@ def saveAllWords(all_words):
         with open(txt_path, "w") as f:
             f.write(json.dumps(word_frames))
 
-   
-            
         images = []
 
         for j, img_data in enumerate(word_frames):
