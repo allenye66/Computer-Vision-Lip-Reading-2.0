@@ -41,7 +41,9 @@ past_word_frames = deque(maxlen=PAST_BUFFER_SIZE)
 ending_buffer_size = 5
 
 
-
+determining_lip_distance = 50
+lip_distances = []
+LIP_DISTANCE_THRESHOLD = None
 
 while True:
     _, frame = cap.read()
@@ -72,95 +74,105 @@ while True:
         lip_top = landmarks.part(50).y
         lip_bottom = landmarks.part(58).y
 
-        # Add padding if necessary to get a 76x110 frame
-        width_diff = LIP_WIDTH - (lip_right - lip_left)
-        height_diff = LIP_HEIGHT - (lip_bottom - lip_top)
-        pad_left = width_diff // 2
-        pad_right = width_diff - pad_left
-        pad_top = height_diff // 2
-        pad_bottom = height_diff - pad_top
+        if(determining_lip_distance != 0 and LIP_DISTANCE_THRESHOLD != None):
 
-        # Ensure that the padding doesn't extend beyond the original frame
-        pad_left = min(pad_left, lip_left)
-        pad_right = min(pad_right, frame.shape[1] - lip_right)
-        pad_top = min(pad_top, lip_top)
-        pad_bottom = min(pad_bottom, frame.shape[0] - lip_bottom)
+            # Add padding if necessary to get a 76x110 frame
+            width_diff = LIP_WIDTH - (lip_right - lip_left)
+            height_diff = LIP_HEIGHT - (lip_bottom - lip_top)
+            pad_left = width_diff // 2
+            pad_right = width_diff - pad_left
+            pad_top = height_diff // 2
+            pad_bottom = height_diff - pad_top
 
-        # Create padded lip region
-        lip_frame = frame[lip_top - pad_top:lip_bottom + pad_bottom, lip_left - pad_left:lip_right + pad_right]
-        lip_frame = cv2.resize(lip_frame, (LIP_WIDTH, LIP_HEIGHT))
+            # Ensure that the padding doesn't extend beyond the original frame
+            pad_left = min(pad_left, lip_left)
+            pad_right = min(pad_right, frame.shape[1] - lip_right)
+            pad_top = min(pad_top, lip_top)
+            pad_bottom = min(pad_bottom, frame.shape[0] - lip_bottom)
 
-        
-        lip_frame_lab = cv2.cvtColor(lip_frame, cv2.COLOR_BGR2LAB)
-        # Apply contrast stretching to the L channel of the LAB image
-        l_channel, a_channel, b_channel = cv2.split(lip_frame_lab)
-        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(3,3))
-        l_channel_eq = clahe.apply(l_channel)
+            # Create padded lip region
+            lip_frame = frame[lip_top - pad_top:lip_bottom + pad_bottom, lip_left - pad_left:lip_right + pad_right]
+            lip_frame = cv2.resize(lip_frame, (LIP_WIDTH, LIP_HEIGHT))
 
-        # Merge the equalized L channel with the original A and B channels
-        lip_frame_eq = cv2.merge((l_channel_eq, a_channel, b_channel))
-        lip_frame_eq = cv2.cvtColor(lip_frame_eq, cv2.COLOR_LAB2BGR)
-        lip_frame_eq= cv2.GaussianBlur(lip_frame_eq, (7, 7), 0)
-        lip_frame_eq = cv2.bilateralFilter(lip_frame_eq, 5, 75, 75)
-        kernel = np.array([[-1,-1,-1],
-                   [-1, 9,-1],
-                   [-1,-1,-1]])
-
-        # Apply the kernel to the input image
-        lip_frame_eq = cv2.filter2D(lip_frame_eq, -1, kernel)
-        lip_frame_eq= cv2.GaussianBlur(lip_frame_eq, (5, 5), 0)
-        lip_frame = lip_frame_eq
-        
-
-        # Draw a circle around the mouth
-        for n in range(48, 61):
-            x = landmarks.part(n).x
-            y = landmarks.part(n).y
-            cv2.circle(img=frame, center=(x, y), radius=3, color=(0, 255, 0), thickness=-1)
-
-
-
-
-        print(len(curr_word_frames))
-
-        if lip_distance > 45: # person is talking
-            cv2.putText(frame, "Talking", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
-            curr_word_frames += [lip_frame.tolist()]
-            not_talking_counter = 0
+            lip_frame_lab = cv2.cvtColor(lip_frame, cv2.COLOR_BGR2LAB)
+            # Apply contrast stretching to the L channel of the LAB image
+            l_channel, a_channel, b_channel = cv2.split(lip_frame_lab)
+            clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(3,3))
+            l_channel_eq = clahe.apply(l_channel)
 
-        else:
-            cv2.putText(frame, "Not talking", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            not_talking_counter += 1
+            # Merge the equalized L channel with the original A and B channels
+            lip_frame_eq = cv2.merge((l_channel_eq, a_channel, b_channel))
+            lip_frame_eq = cv2.cvtColor(lip_frame_eq, cv2.COLOR_LAB2BGR)
+            lip_frame_eq= cv2.GaussianBlur(lip_frame_eq, (7, 7), 0)
+            lip_frame_eq = cv2.bilateralFilter(lip_frame_eq, 5, 75, 75)
+            kernel = np.array([[-1,-1,-1],
+                       [-1, 9,-1],
+                       [-1,-1,-1]])
+
+            # Apply the kernel to the input image
+            lip_frame_eq = cv2.filter2D(lip_frame_eq, -1, kernel)
+            lip_frame_eq= cv2.GaussianBlur(lip_frame_eq, (5, 5), 0)
+            lip_frame = lip_frame_eq
             
-            # a valid word finished and has all needed ending buffer frames
-            # we do len(curr_word_frames) + PAST_BUFFER_SIZE since we add past frames after this step (not included yet)
-            if not_talking_counter >= NOT_TALKING_THRESHOLD and len(curr_word_frames) + PAST_BUFFER_SIZE == TOTAL_FRAMES: 
-                data_count += 1
-                curr_word_frames = list(past_word_frames) + curr_word_frames
-                print(f"adding {label.upper()} shape", lip_frame.shape, "count is", data_count, "frames is", len(curr_word_frames))
 
-                all_words.append(curr_word_frames)
-                labels.append(label)
-                curr_word_frames = []
-                not_talking_counter = 0
+            # Draw a circle around the mouth
+            for n in range(48, 61):
+                x = landmarks.part(n).x
+                y = landmarks.part(n).y
+                cv2.circle(img=frame, center=(x, y), radius=3, color=(0, 255, 0), thickness=-1)
 
-            # curr word frames not fully done yet, add ending buffer frames
-            elif not_talking_counter < NOT_TALKING_THRESHOLD and len(curr_word_frames) + PAST_BUFFER_SIZE < TOTAL_FRAMES and len(curr_word_frames) > VALID_WORD_THRESHOLD:
-                #print("adding ending buffer frames the len(curr_word_frames) is", (len(curr_word_frames)))
+
+
+
+            print(len(curr_word_frames))
+
+            if lip_distance > LIP_DISTANCE_THRESHOLD: # person is talking
+                cv2.putText(frame, "Talking", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                
                 curr_word_frames += [lip_frame.tolist()]
                 not_talking_counter = 0
-            # too little frames, discard the data
-            elif len(curr_word_frames) < VALID_WORD_THRESHOLD or (not_talking_counter >= NOT_TALKING_THRESHOLD and len(curr_word_frames) + PAST_BUFFER_SIZE > TOTAL_FRAMES):
-                #print("bad recording, resetting curr word frames")
-                curr_word_frames = []
 
-            past_word_frames+= [lip_frame.tolist()]
+            else:
+                cv2.putText(frame, "Not talking", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                not_talking_counter += 1
+                
+                # a valid word finished and has all needed ending buffer frames
+                # we do len(curr_word_frames) + PAST_BUFFER_SIZE since we add past frames after this step (not included yet)
+                if not_talking_counter >= NOT_TALKING_THRESHOLD and len(curr_word_frames) + PAST_BUFFER_SIZE == TOTAL_FRAMES: 
+                    data_count += 1
+                    curr_word_frames = list(past_word_frames) + curr_word_frames
+                    print(f"adding {label.upper()} shape", lip_frame.shape, "count is", data_count, "frames is", len(curr_word_frames))
 
-            #circular frame buffer
-            if len(past_word_frames) > PAST_BUFFER_SIZE:
-                past_word_frames.pop(0)
+                    all_words.append(curr_word_frames)
+                    labels.append(label)
+                    curr_word_frames = []
+                    not_talking_counter = 0
 
+                # curr word frames not fully done yet, add ending buffer frames
+                elif not_talking_counter < NOT_TALKING_THRESHOLD and len(curr_word_frames) + PAST_BUFFER_SIZE < TOTAL_FRAMES and len(curr_word_frames) > VALID_WORD_THRESHOLD:
+                    #print("adding ending buffer frames the len(curr_word_frames) is", (len(curr_word_frames)))
+                    curr_word_frames += [lip_frame.tolist()]
+                    not_talking_counter = 0
+                # too little frames, discard the data
+                elif len(curr_word_frames) < VALID_WORD_THRESHOLD or (not_talking_counter >= NOT_TALKING_THRESHOLD and len(curr_word_frames) + PAST_BUFFER_SIZE > TOTAL_FRAMES):
+                    #print("bad recording, resetting curr word frames")
+                    curr_word_frames = []
+
+                past_word_frames+= [lip_frame.tolist()]
+
+                #circular frame buffer
+                if len(past_word_frames) > PAST_BUFFER_SIZE:
+                    past_word_frames.pop(0)
+        else:
+            cv2.putText(frame, "KEEP MOUTH CLOSED, DETERMINING DISTANCE BETWEEN LIPS", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                
+            determining_lip_distance -= 1
+            distance = landmarks.part(58).y - landmarks.part(50).y 
+            print("distance between lips is", distance)
+            lip_distances.append(distance)
+            if(determining_lip_distance == 0):
+                LIP_DISTANCE_THRESHOLD = sum(lip_distances) / len(lip_distances) + 2
     cv2.imshow(winname="Mouth", mat=frame)
 
     # Exit when escape is pressed
