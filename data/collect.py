@@ -38,6 +38,18 @@ labels = []
 
 custom_distance = input("If you want, enter a custom lip distance threshold or -1: ")
 
+clean_output_dir = input("To clean output directory of the current word, type 'yes': ")
+
+if clean_output_dir == "yes":
+    root_dir = os.path.abspath(os.path.join(os.getcwd(), ".."))
+
+    outputs_dir = os.path.join(root_dir, "outputs")
+
+    for folder_name in os.listdir(outputs_dir):
+        folder_path = os.path.join(outputs_dir, folder_name)
+        if os.path.isdir(folder_path) and label in folder_path:
+            print(f"Removing folder {folder_name}...")
+            os.system(f"rm -rf {folder_path}")
 
 past_word_frames = deque(maxlen=PAST_BUFFER_SIZE)
 
@@ -133,8 +145,11 @@ while True:
 
 
 
+            ORANGE =  (0, 180, 255) #RECORDING WORD RIGHT NOW
+            BLUE = (255, 0, 0) #NOT RECORDING WORD
+            RED = (0, 0, 255) #Not talking
 
-            print(len(curr_word_frames))
+            #print(len(curr_word_frames))
 
             if lip_distance > LIP_DISTANCE_THRESHOLD: # person is talking
                 cv2.putText(frame, "Talking", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
@@ -142,13 +157,17 @@ while True:
                 curr_word_frames += [lip_frame.tolist()]
                 not_talking_counter = 0
 
+                cv2.putText(frame, "RECORDING WORD RIGHT NOW", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, ORANGE, 2)
+
             else:
-                cv2.putText(frame, "Not talking", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                cv2.putText(frame, "Not talking", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, RED, 2)
                 not_talking_counter += 1
                 
                 # a valid word finished and has all needed ending buffer frames
                 # we do len(curr_word_frames) + PAST_BUFFER_SIZE since we add past frames after this step (not included yet)
                 if not_talking_counter >= NOT_TALKING_THRESHOLD and len(curr_word_frames) + PAST_BUFFER_SIZE == TOTAL_FRAMES: 
+                    cv2.putText(frame, "NOT RECORDING WORD", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, BLUE, 2)
+
                     data_count += 1
                     curr_word_frames = list(past_word_frames) + curr_word_frames
                     print(f"adding {label.upper()} shape", lip_frame.shape, "count is", data_count, "frames is", len(curr_word_frames))
@@ -160,13 +179,23 @@ while True:
 
                 # curr word frames not fully done yet, add ending buffer frames
                 elif not_talking_counter < NOT_TALKING_THRESHOLD and len(curr_word_frames) + PAST_BUFFER_SIZE < TOTAL_FRAMES and len(curr_word_frames) > VALID_WORD_THRESHOLD:
+                    cv2.putText(frame, "RECORDING WORD RIGHT NOW", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, ORANGE, 2)
+
                     #print("adding ending buffer frames the len(curr_word_frames) is", (len(curr_word_frames)))
                     curr_word_frames += [lip_frame.tolist()]
                     not_talking_counter = 0
+
                 # too little frames, discard the data
                 elif len(curr_word_frames) < VALID_WORD_THRESHOLD or (not_talking_counter >= NOT_TALKING_THRESHOLD and len(curr_word_frames) + PAST_BUFFER_SIZE > TOTAL_FRAMES):
+                    cv2.putText(frame, "NOT RECORDING WORD", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, BLUE, 2)
+
                     #print("bad recording, resetting curr word frames")
                     curr_word_frames = []
+
+                elif not_talking_counter < NOT_TALKING_THRESHOLD:
+                    cv2.putText(frame, "RECORDING WORD RIGHT NOW", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, ORANGE, 2)
+                else:
+                    cv2.putText(frame, "NOT RECORDING WORD", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, BLUE, 2)
 
                 past_word_frames+= [lip_frame.tolist()]
 
@@ -174,7 +203,7 @@ while True:
                 if len(past_word_frames) > PAST_BUFFER_SIZE:
                     past_word_frames.pop(0)
         else:
-            cv2.putText(frame, "KEEP MOUTH CLOSED, DETERMINING DISTANCE BETWEEN LIPS", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            cv2.putText(frame, "KEEP MOUTH CLOSED, DETERMINING DISTANCE BETWEEN LIPS", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
                 
             determining_lip_distance -= 1
             distance = landmarks.part(58).y - landmarks.part(50).y 
@@ -182,6 +211,11 @@ while True:
             lip_distances.append(distance)
             if(determining_lip_distance == 0):
                 LIP_DISTANCE_THRESHOLD = sum(lip_distances) / len(lip_distances) + 2
+
+    cv2.putText(frame, "COLLECTED WORDS: " + str(len(all_words)), (50, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+
+    cv2.putText(frame, "Press 'ESC' to exit", (900, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+
     cv2.imshow(winname="Mouth", mat=frame)
 
     # Exit when escape is pressed
