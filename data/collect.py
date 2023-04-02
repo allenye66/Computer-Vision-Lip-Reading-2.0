@@ -36,15 +36,24 @@ data_count = 1
 label = input("What word you like to collect data for? ")
 labels = []
 
+custom_distance = input("If you want, enter a custom lip distance threshold or -1: ")
+
+
 past_word_frames = deque(maxlen=PAST_BUFFER_SIZE)
 
 ending_buffer_size = 5
+
 
 
 determining_lip_distance = 50
 lip_distances = []
 LIP_DISTANCE_THRESHOLD = None
 
+if custom_distance != -1 and custom_distance.isdigit() and int(custom_distance) > 0:
+    custom_distance = int(custom_distance)
+    determining_lip_distance = 0
+    LIP_DISTANCE_THRESHOLD = custom_distance
+    print("USING CUSTOM DISTANCE")
 while True:
     _, frame = cap.read()
     # Convert image into grayscale
