@@ -12,7 +12,7 @@ from collections import deque
 
 
 TOTAL_FRAMES = 22
-VALID_WORD_THRESHOLD = 5
+VALID_WORD_THRESHOLD = 1
 NOT_TALKING_THRESHOLD = 10
 PAST_BUFFER_SIZE = 4
 # Load the detector
@@ -33,7 +33,9 @@ LIP_WIDTH = 112
 LIP_HEIGHT = 80
 
 data_count = 1
-label = input("What word you like to collect data for? ")
+words = ["here", "is", "a", "demo", "can", "you", "read", "my", "lips", "cat", "dog", "hello", "bye"]
+options = ", ".join(words)
+label = input("What word you like to collect data for? The options are \n" + options + ": ")
 labels = []
 
 custom_distance = input("If you want, enter a custom lip distance threshold or -1: ")
