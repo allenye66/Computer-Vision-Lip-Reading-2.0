@@ -10,8 +10,35 @@ import numpy as np
 import csv
 from collections import deque
 import tensorflow as tf
+import sys
+sys.path.append('../data')
+from constants import *
+from constants import TOTAL_FRAMES, VALID_WORD_THRESHOLD, NOT_TALKING_THRESHOLD, PAST_BUFFER_SIZE, LIP_WIDTH, LIP_HEIGHT
+
+
+label_dict = {6: 'hello', 5: 'dog', 10: 'my', 12: 'you', 9: 'lips', 3: 'cat', 11: 'read', 0: 'a', 4: 'demo', 7: 'here', 8: 'is', 1: 'bye', 2: 'can'}
+count = 0
+#label_dict = {2: 'my', 1: 'lips', 3: 'read', 0: 'demo'}
+
 # Define the input shape
-input_shape = (17, 80, 112, 3)
+input_shape = (TOTAL_FRAMES, 80, 112, 3)
+
+'''
+model = tf.keras.Sequential([
+    tf.keras.layers.Conv3D(16, (3, 3, 3), activation='relu', input_shape=input_shape),
+    tf.keras.layers.MaxPooling3D((2, 2, 2)),
+    tf.keras.layers.Conv3D(64, (3, 3, 3), activation='relu'),
+    tf.keras.layers.MaxPooling3D((2, 2, 2)),
+    tf.keras.layers.Conv3D(128, (3, 3, 3), activation='relu'),
+    tf.keras.layers.MaxPooling3D((2, 2, 2)),
+    tf.keras.layers.Flatten(),
+    tf.keras.layers.Dense(128, activation='relu'),
+    tf.keras.layers.Dropout(0.3),
+    tf.keras.layers.Dense(64, activation='relu'),
+    tf.keras.layers.Dropout(0.3),
+    tf.keras.layers.Dense(len(label_dict), activation='softmax')
+])
+'''
 
 # Define the model architecture
 model = tf.keras.Sequential([
@@ -20,10 +47,14 @@ model = tf.keras.Sequential([
     tf.keras.layers.Conv3D(64, (3, 3, 3), activation='relu'),
     tf.keras.layers.MaxPooling3D((2, 2, 2)),
     tf.keras.layers.Flatten(),
+    tf.keras.layers.Dense(128, activation='relu'),
+    tf.keras.layers.Dropout(0.5),
     tf.keras.layers.Dense(64, activation='relu'),
     tf.keras.layers.Dropout(0.5),
-    tf.keras.layers.Dense(1, activation='sigmoid')
+    tf.keras.layers.Dense(len(label_dict), activation='softmax')
 ])
+
+
 model.load_weights('../model/model_weights.h5', by_name=True)
 
 # Load the detector
@@ -39,20 +70,19 @@ curr_word_frames = []
 not_talking_counter = 0
 
 
-LIP_WIDTH = 112
-LIP_HEIGHT = 80
-
 
 first_word = True
 labels = []
 
-past_buffer_size = 4
-past_word_frames = deque(maxlen=past_buffer_size)
+past_word_frames = deque(maxlen=PAST_BUFFER_SIZE)
 
 ending_buffer_size = 5
 
 predicted_word_label = None
 draw_prediction = False
+
+spoken_already = []
+
 while True:
     _, frame = cap.read()
     # Convert image into grayscale
@@ -138,41 +168,60 @@ while True:
         else:
             cv2.putText(frame, "Not talking", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             not_talking_counter += 1
-            if not_talking_counter >= 10 and len(curr_word_frames) > 3: # word finished
+            if not_talking_counter >= NOT_TALKING_THRESHOLD and len(curr_word_frames) + PAST_BUFFER_SIZE == TOTAL_FRAMES: 
+
                 curr_word_frames = list(past_word_frames) + curr_word_frames
 
                 curr_data = np.array([curr_word_frames[:input_shape[0]]])
-  
-                print(curr_data.shape)
-                if (curr_data.shape[1]) == input_shape[0]:
 
-                    print("PREDICTING NOW!")
-                    prediction = model.predict(curr_data)
-                    
-                    if prediction < 0.5:
-                        predicted_word_label = "COOP"
-                    else:
-                        predicted_word_label = "CAT"
-                    print("FINISHED!", predicted_word_label)
-                    # Draw the predicted word on the screen
-                    draw_prediction = True
+                print("*********", curr_data.shape)
+                print(spoken_already)
+                prediction = model.predict(curr_data)
+
+                prob_per_class = []
+                for i in range(len(prediction[0])):
+                    prob_per_class.append((prediction[0][i], label_dict[i]))
+                sorted_probs = sorted(prob_per_class, key=lambda x: x[0], reverse=True)
+                for prob, label in sorted_probs:
+                    print(f"{label}: {prob:.3f}")
+
+                predicted_class_index = np.argmax(prediction)
+                while label_dict[predicted_class_index] in spoken_already:
+                    # If the predicted label has already been spoken,
+                    # set its probability to zero and choose the next highest probability
+                    prediction[0][predicted_class_index] = 0
+                    predicted_class_index = np.argmax(prediction)
+                predicted_word_label = label_dict[predicted_class_index]
+                spoken_already.append(predicted_word_label)
+
+                print("FINISHED!", predicted_word_label)
+                draw_prediction = True
+                count = 0
 
                 curr_word_frames = []
                 not_talking_counter = 0
-            #'''(input_shape[0]- len(curr_word_frames) + past_buffer_size - 1) '''
-            elif not_talking_counter < ending_buffer_size and len(curr_word_frames) > 3: #add ending buffer frames, make it dynamic
+            elif not_talking_counter < NOT_TALKING_THRESHOLD and len(curr_word_frames) + PAST_BUFFER_SIZE < TOTAL_FRAMES and len(curr_word_frames) > VALID_WORD_THRESHOLD:
                 curr_word_frames += [lip_frame.tolist()]
+                not_talking_counter = 0
+            elif len(curr_word_frames) < VALID_WORD_THRESHOLD or (not_talking_counter >= NOT_TALKING_THRESHOLD and len(curr_word_frames) + PAST_BUFFER_SIZE > TOTAL_FRAMES):
+                curr_word_frames = []
+
             past_word_frames+= [lip_frame.tolist()]
-            if len(past_word_frames) > past_buffer_size:
+            if len(past_word_frames) > PAST_BUFFER_SIZE:
                 past_word_frames.pop(0)
 
-    if(draw_prediction):
+    if(draw_prediction and count < 20):
+        count += 1
         cv2.putText(frame, predicted_word_label, (50 ,100), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 2)
 
     cv2.imshow(winname="Mouth", mat=frame)
 
+    key = cv2.waitKey(1)
+    if key == ord('q'):
+        spoken_already = []
+
     # Exit when escape is pressed
-    if cv2.waitKey(delay=1) == 27:
+    if key == 27:
         break
 
 

@@ -9,12 +9,9 @@ import imageio.v2 as imageio
 import numpy as np
 import csv
 from collections import deque
+from constants import TOTAL_FRAMES, VALID_WORD_THRESHOLD, NOT_TALKING_THRESHOLD, PAST_BUFFER_SIZE, LIP_WIDTH, LIP_HEIGHT
 
 
-TOTAL_FRAMES = 22
-VALID_WORD_THRESHOLD = 1
-NOT_TALKING_THRESHOLD = 10
-PAST_BUFFER_SIZE = 4
 # Load the detector
 detector = dlib.get_frontal_face_detector()
 
@@ -29,8 +26,6 @@ curr_word_frames = []
 not_talking_counter = 0
 
 
-LIP_WIDTH = 112
-LIP_HEIGHT = 80
 
 data_count = 1
 words = ["here", "is", "a", "demo", "can", "you", "read", "my", "lips", "cat", "dog", "hello", "bye"]
@@ -54,9 +49,6 @@ if clean_output_dir == "yes":
             os.system(f"rm -rf {folder_path}")
 
 past_word_frames = deque(maxlen=PAST_BUFFER_SIZE)
-
-ending_buffer_size = 5
-
 
 
 determining_lip_distance = 50
