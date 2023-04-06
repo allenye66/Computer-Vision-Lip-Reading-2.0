@@ -1,4 +1,6 @@
 # Computer-Vision-Lip-Reading-2.0
+Why "2.0"? This project builds upon one of my past projects where I attempted to create a solution to the same problem but using a vastly different strategy. Visit my old project [here](https://github.com/allenye66/Computer-Vision-Lip-Reading).
+
 
 ## Synopsys
 
