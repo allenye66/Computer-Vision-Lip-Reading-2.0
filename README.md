@@ -29,7 +29,7 @@ https://user-images.githubusercontent.com/46653284/228344036-ad19e45c-d329-4040-
 
 ## Files/Folders
 
-- `writeup.pdf`: a detailed documentation of my entire project.
+- `writeup.pdf`: a detailed documentation of my entire project. To view the gifs, please visit [here](https://docs.google.com/document/d/1FLVwjXf4BfxgjIBl9CszCMwwwQ-Tm0crAv71qGPmLCM/edit).
 
 - `/data/collect.py`: This script is used to collect the data for training the speech recognition model. It records audio clips of people speaking the different commands and saves them to a directory.
 
