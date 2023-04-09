@@ -197,7 +197,7 @@ while True:
                 if len(past_word_frames) > PAST_BUFFER_SIZE:
                     past_word_frames.pop(0)
         else:
-            cv2.putText(frame, "KEEP MOUTH CLOSED, DETERMINING DISTANCE BETWEEN LIPS", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            cv2.putText(frame, "KEEP MOUTH CLOSED, CALIBRATING DISTANCE BETWEEN LIPS", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
                 
             determining_lip_distance -= 1
             distance = landmarks.part(58).y - landmarks.part(50).y 
