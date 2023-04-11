@@ -49,10 +49,10 @@ To use my project, please read the following:
 1. Run `collect.py` to record audio clips of yourself speaking a chosen word and save them to a directory.
     - First, enter the word you want to collect data for.
     - If this is your first time running the script, do not enter a lip distance (it will calibrate itself).
-2. View `training.ipynb` to see how I trained the speech recognition model on my collected data.
+2. View `/training/3DCNN.ipynb` to see how I trained the speech recognition model on my collected data.
 3. Use `predict_live.py` to test the trained model in a live demo. 
 
-Note: The system requires a microphone to be connected to the computer running the demo. 
+Note: The current model implemented in `predict_live.py` is a less accurate model. I am unable to upload the weights for the model showcased in `/training/3DCNN.ipynb` as the file is too large.
 
 ## Dependencies
 
