@@ -20,9 +20,14 @@ predictor = dlib.shape_predictor("../model/face_weights.dat")
 
 # read the image
 cap = cv2.VideoCapture(0)
-#cap.set(cv2.CAP_PROP_FPS, 60)
+
+#storing all the collected data here
 all_words = []
+
+#temporary storage for each word
 curr_word_frames = []
+
+#counter
 not_talking_counter = 0
 
 
@@ -37,22 +42,27 @@ custom_distance = input("If you want, enter a custom lip distance threshold or -
 
 clean_output_dir = input("To clean output directory of the current word, type 'yes': ")
 
+#clear the directory if needed
 if clean_output_dir == "yes":
     root_dir = os.path.abspath(os.path.join(os.getcwd(), ".."))
-
     outputs_dir = os.path.join(root_dir, "outputs")
-
     for folder_name in os.listdir(outputs_dir):
         folder_path = os.path.join(outputs_dir, folder_name)
         if os.path.isdir(folder_path) and label in folder_path:
             print(f"Removing folder {folder_name}...")
             os.system(f"rm -rf {folder_path}")
 
+#circular buffer for storing "previous" frames
 past_word_frames = deque(maxlen=PAST_BUFFER_SIZE)
 
 
+#counter for number of frames needed to calibrate the not-talking lip distance
 determining_lip_distance = 50
+
+#store the not-talking lip distances when averaging
 lip_distances = []
+
+#threshold for determing if user is talking or not talking
 LIP_DISTANCE_THRESHOLD = None
 
 if custom_distance != -1 and custom_distance.isdigit() and int(custom_distance) > 0:
@@ -60,7 +70,9 @@ if custom_distance != -1 and custom_distance.isdigit() and int(custom_distance) 
     determining_lip_distance = 0
     LIP_DISTANCE_THRESHOLD = custom_distance
     print("USING CUSTOM DISTANCE")
+
 while True:
+
     _, frame = cap.read()
     # Convert image into grayscale
     gray = cv2.cvtColor(src=frame, code=cv2.COLOR_BGR2GRAY)
@@ -82,16 +94,16 @@ while True:
         mouth_bottom = (landmarks.part(57).x, landmarks.part(57).y)
         lip_distance = math.hypot(mouth_bottom[0] - mouth_top[0], mouth_bottom[1] - mouth_top[1])
 
-
-
+        #lip landmarks
         lip_left = landmarks.part(48).x
         lip_right = landmarks.part(54).x
         lip_top = landmarks.part(50).y
         lip_bottom = landmarks.part(58).y
 
+        #if user enters custom lip distance or script finishes calibrating
         if(determining_lip_distance != 0 and LIP_DISTANCE_THRESHOLD != None):
 
-            # Add padding if necessary to get a 76x110 frame
+            # Add padding if necessary to get a 80x112 frame
             width_diff = LIP_WIDTH - (lip_right - lip_left)
             height_diff = LIP_HEIGHT - (lip_bottom - lip_top)
             pad_left = width_diff // 2
@@ -111,6 +123,7 @@ while True:
 
             
             lip_frame_lab = cv2.cvtColor(lip_frame, cv2.COLOR_BGR2LAB)
+            
             # Apply contrast stretching to the L channel of the LAB image
             l_channel, a_channel, b_channel = cv2.split(lip_frame_lab)
             clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(3,3))
@@ -147,7 +160,6 @@ while True:
 
             if lip_distance > LIP_DISTANCE_THRESHOLD: # person is talking
                 cv2.putText(frame, "Talking", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                
                 curr_word_frames += [lip_frame.tolist()]
                 not_talking_counter = 0
 
@@ -196,12 +208,12 @@ while True:
                 #circular frame buffer
                 if len(past_word_frames) > PAST_BUFFER_SIZE:
                     past_word_frames.pop(0)
-        else:
+        else: #we are calibrating the not-talking distance
             cv2.putText(frame, "KEEP MOUTH CLOSED, CALIBRATING DISTANCE BETWEEN LIPS", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-                
             determining_lip_distance -= 1
             distance = landmarks.part(58).y - landmarks.part(50).y 
-            print("distance between lips is", distance)
+            cv2.putText(frame, "Current distance: " + str(distance + 2), (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+
             lip_distances.append(distance)
             if(determining_lip_distance == 0):
                 LIP_DISTANCE_THRESHOLD = sum(lip_distances) / len(lip_distances) + 2
@@ -218,6 +230,7 @@ while True:
 
 #not needed for new version where we have a set amount of frames
 def process_frames(all_words, labels):
+
     # Get the median length of all sublists
     median_length = statistics.median([len(sublist) for sublist in all_words])
     median_length = int(median_length)
@@ -233,7 +246,7 @@ def process_frames(all_words, labels):
     return all_words, labels
 
 
-all_words, labels = process_frames(all_words, labels)
+#all_words, labels = process_frames(all_words, labels)
 
 
 def saveAllWords(all_words):
@@ -256,6 +269,7 @@ def saveAllWords(all_words):
         while os.path.exists(word_folder):
             next_dir_number += 1
             word_folder = os.path.join(output_dir, label + "_" + f"{next_dir_number}")
+        
         os.makedirs(word_folder)
 
         txt_path = os.path.join(word_folder, "data.txt")
@@ -276,6 +290,8 @@ def saveAllWords(all_words):
             images.append(imageio.imread(img_path))
         print("The length of this subfolder:", len(images))
         video_path = os.path.join(word_folder, "video.mp4")
+
+        #save a video from combining the images
         imageio.mimsave(video_path, images, fps=int(cap.get(cv2.CAP_PROP_FPS)))
         next_dir_number += 1
 
